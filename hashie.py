@@ -78,13 +78,18 @@ class hashie(plugins.Plugin):
             elif self._writePMKID(filename, access_point):
                 handshake_status.append('Created {}.16800 (PMKID) from pcap'.format(name))
             
+            if os.path.isfile(fullpathNoExt +  '.22000'):
+                handshake_status.append('Already have {}.22000 (PMKID)'.format(name))
+            elif self._writeEAPOLPMKID(filename, access_point):
+                handshake_status.append('Created {}.22000 (PMKID) from pcap'.format(name))
+
             if handshake_status:
                 logging.info('[hashie] Good news:\n\t' + '\n\t'.join(handshake_status))
     
     def _writeEAPOL(self, fullpath):
         fullpathNoExt = fullpath.split('.')[0]
         filename = fullpath.split('/')[-1:][0].split('.')[0]
-        result = subprocess.getoutput('hcxpcaptool -o {}.2500 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
+        result = subprocess.getoutput('hcxpcaptool --hccapx={}.2500 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
         if os.path.isfile(fullpathNoExt +  '.2500'):
             logging.debug('[hashie] [+] EAPOL Success: {}.2500 created'.format(filename))
             return True
@@ -94,12 +99,12 @@ class hashie(plugins.Plugin):
     def _writePMKID(self, fullpath, apJSON):
         fullpathNoExt = fullpath.split('.')[0]
         filename = fullpath.split('/')[-1:][0].split('.')[0]
-        result = subprocess.getoutput('hcxpcaptool -k {}.16800 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
+        result = subprocess.getoutput('hcxpcaptool --pmkid={}.16800 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
         if os.path.isfile(fullpathNoExt + '.16800'):
             logging.debug('[hashie] [+] PMKID Success: {}.16800 created'.format(filename))
             return True
         else: #make a raw dump
-            result = subprocess.getoutput('hcxpcaptool -K {}.16800 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
+            result = subprocess.getoutput('hcxpcaptool --pmkid={}.16800 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
             if os.path.isfile(fullpathNoExt + '.16800'):
                 if self._repairPMKID(fullpath, apJSON) == False:
                     logging.debug('[hashie] [-] PMKID Fail: {}.16800 could not be repaired'.format(filename))
@@ -110,6 +115,16 @@ class hashie(plugins.Plugin):
             else:
                 logging.debug('[hashie] [-] Could not attempt repair of {} as no raw PMKID file was created'.format(filename))
                 return False
+    
+    def _writeEAPOLPMKID(self, fullpath):
+        fullpathNoExt = fullpath.split('.')[0]
+        filename = fullpath.split('/')[-1:][0].split('.')[0]
+        result = subprocess.getoutput('hcxpcaptool -o {}.22000 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
+        if os.path.isfile(fullpathNoExt +  '.22000'):
+            logging.debug('[hashie] [+] EAPOL + PMKID Success: {}.22000 created'.format(filename))
+            return True
+        else:
+            return False
     
     def _repairPMKID(self, fullpath, apJSON):
         hashString = ""
@@ -164,11 +179,20 @@ class hashie(plugins.Plugin):
                     successful_jobs.append('2500: ' + pcapFileName)
                 else:
                     failed_jobs.append('2500: ' + pcapFileName)
+
+
             if not os.path.isfile(fullpathNoExt + '.16800'): #if no 16800, try
-                if self._writePMKID(handshake, ""):
+                if self._writeEAPOL(handshake):
                     successful_jobs.append('16800: ' + pcapFileName)
                 else:
                     failed_jobs.append('16800: ' + pcapFileName)
+
+        
+            if not os.path.isfile(fullpathNoExt + '.22000'): #if no 22000, try
+                if self._writeEAPOLPMKID(handshake, ""):
+                    successful_jobs.append('22000: ' + pcapFileName)
+                else:
+                    failed_jobs.append('22000: ' + pcapFileName)
                     if not os.path.isfile(fullpathNoExt + '.2500'): #if no 16800 AND no 2500
                         lonely_pcaps.append(handshake)
                         logging.debug('[hashie] Batch job: added {} to lonely list'.format(pcapFileName))
