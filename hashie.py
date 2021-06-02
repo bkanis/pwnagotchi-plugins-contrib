@@ -81,7 +81,7 @@ class hashie(plugins.Plugin):
             if os.path.isfile(fullpathNoExt +  '.22000'):
                 handshake_status.append('Already have {}.22000 (PMKID)'.format(name))
             elif self._writeEAPOLPMKID(filename, access_point):
-                handshake_status.append('Created {}.22000 (PMKID) from pcap'.format(name))
+                handshake_status.append('Created {}.22000 (EAPOL + PMKID) from pcap'.format(name))
 
             if handshake_status:
                 logging.info('[hashie] Good news:\n\t' + '\n\t'.join(handshake_status))
@@ -193,7 +193,7 @@ class hashie(plugins.Plugin):
                     successful_jobs.append('22000: ' + pcapFileName)
                 else:
                     failed_jobs.append('22000: ' + pcapFileName)
-                    if not os.path.isfile(fullpathNoExt + '.2500'): #if no 16800 AND no 2500
+                    if not os.path.isfile(fullpathNoExt + '.2500'): #if no 22000 AND no 2500
                         lonely_pcaps.append(handshake)
                         logging.debug('[hashie] Batch job: added {} to lonely list'.format(pcapFileName))
             if ((num + 1) % 50 == 0) or (num + 1 == len(handshakes_list)): #report progress every 50, or when done
