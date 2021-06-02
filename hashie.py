@@ -12,15 +12,14 @@ import pwnagotchi.ui.fonts as fonts
 
 class hashie(plugins.Plugin):
     __author__ = 'junohea.mail@gmail.com'
-    __version__ = '1.0.2'
+    __version__ = '1.0.3'
     __license__ = 'GPL3'
     __description__ = '''
                         Attempt to automatically convert pcaps to a crackable format.
                         If successful, the files  containing the hashes will be saved 
                         in the same folder as the handshakes. 
                         The files are saved in their respective Hashcat format:
-                          - EAPOL hashes are saved as *.2500
-                          - PMKID hashes are saved as *.16800
+                          - EAPOL + PMKID hashes are saved as *.22000
                         All PCAP files without enough information to create a hash are
                           stored in a file that can be read by the webgpsmap plugin.
                         
@@ -44,8 +43,8 @@ class hashie(plugins.Plugin):
                             - The repair is very basic and could certainly be improved!
                         Todo:
                           Make it so users dont need hcxpcaptool (unless it gets added to the base image)
-                              Phase 1: Extract/construct 2500/16800 hashes through tcpdump commands
-                              Phase 2: Extract/construct 2500/16800 hashes entirely in python
+                              Phase 1: Extract/construct 22000/16800 hashes through tcpdump commands
+                              Phase 2: Extract/construct 22000/16800 hashes entirely in python
                           Improve the code, a lot
                         '''
     
@@ -68,20 +67,10 @@ class hashie(plugins.Plugin):
             fullpathNoExt = filename.split('.')[0]
             name = filename.split('/')[-1:][0].split('.')[0]
             
-            if os.path.isfile(fullpathNoExt +  '.2500'):
-                handshake_status.append('Already have {}.2500 (EAPOL)'.format(name))
-            elif self._writeEAPOL(filename):
-                handshake_status.append('Created {}.2500 (EAPOL) from pcap'.format(name))
-            
-            if os.path.isfile(fullpathNoExt +  '.16800'):
-                handshake_status.append('Already have {}.16800 (PMKID)'.format(name))
-            elif self._writePMKID(filename, access_point):
-                handshake_status.append('Created {}.16800 (PMKID) from pcap'.format(name))
-            
             if os.path.isfile(fullpathNoExt +  '.22000'):
-                handshake_status.append('Already have {}.22000 (PMKID)'.format(name))
-            elif self._writeEAPOLPMKID(filename, access_point):
-                handshake_status.append('Created {}.22000 (EAPOL + PMKID) from pcap'.format(name))
+                handshake_status.append('Already have {}.22000 (EAPOL)'.format(name))
+            elif self._writeEAPOL(filename):
+                handshake_status.append('Created {}.22000 (EAPOL) from pcap'.format(name))
 
             if handshake_status:
                 logging.info('[hashie] Good news:\n\t' + '\n\t'.join(handshake_status))
@@ -89,83 +78,13 @@ class hashie(plugins.Plugin):
     def _writeEAPOL(self, fullpath):
         fullpathNoExt = fullpath.split('.')[0]
         filename = fullpath.split('/')[-1:][0].split('.')[0]
-        result = subprocess.getoutput('hcxpcaptool --hccapx={}.2500 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
-        if os.path.isfile(fullpathNoExt +  '.2500'):
-            logging.debug('[hashie] [+] EAPOL Success: {}.2500 created'.format(filename))
-            return True
-        else:
-            return False
-        
-    def _writePMKID(self, fullpath, apJSON):
-        fullpathNoExt = fullpath.split('.')[0]
-        filename = fullpath.split('/')[-1:][0].split('.')[0]
-        result = subprocess.getoutput('hcxpcaptool --pmkid={}.16800 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
-        if os.path.isfile(fullpathNoExt + '.16800'):
-            logging.debug('[hashie] [+] PMKID Success: {}.16800 created'.format(filename))
-            return True
-        else: #make a raw dump
-            result = subprocess.getoutput('hcxpcaptool --pmkid={}.16800 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
-            if os.path.isfile(fullpathNoExt + '.16800'):
-                if self._repairPMKID(fullpath, apJSON) == False:
-                    logging.debug('[hashie] [-] PMKID Fail: {}.16800 could not be repaired'.format(filename))
-                    return False
-                else:
-                    logging.debug('[hashie] [+] PMKID Success: {}.16800 repaired'.format(filename))
-                    return True
-            else:
-                logging.debug('[hashie] [-] Could not attempt repair of {} as no raw PMKID file was created'.format(filename))
-                return False
-    
-    def _writeEAPOLPMKID(self, fullpath):
-        fullpathNoExt = fullpath.split('.')[0]
-        filename = fullpath.split('/')[-1:][0].split('.')[0]
         result = subprocess.getoutput('hcxpcaptool -o {}.22000 {} >/dev/null 2>&1'.format(fullpathNoExt,fullpath))
         if os.path.isfile(fullpathNoExt +  '.22000'):
-            logging.debug('[hashie] [+] EAPOL + PMKID Success: {}.22000 created'.format(filename))
+            logging.debug('[hashie] [+] EAPOL Success: {}.22000 created'.format(filename))
             return True
         else:
             return False
-    
-    def _repairPMKID(self, fullpath, apJSON):
-        hashString = ""
-        clientString = []
-        fullpathNoExt = fullpath.split('.')[0]
-        filename = fullpath.split('/')[-1:][0].split('.')[0]
-        logging.debug('[hashie] Repairing {}'.format(filename))
-        with open(fullpathNoExt + '.16800','r') as tempFileA:
-            hashString = tempFileA.read()
-        if apJSON != "": 
-            clientString.append('{}:{}'.format(apJSON['mac'].replace(':',''), apJSON['hostname'].encode('hex')))
-        else:
-            #attempt to extract the AP's name via hcxpcaptool
-            result = subprocess.getoutput('hcxpcaptool -X /tmp/{} {} >/dev/null 2>&1'.format(filename,fullpath))
-            if os.path.isfile('/tmp/' + filename):
-                with open('/tmp/' + filename,'r') as tempFileB:
-                    temp = tempFileB.read().splitlines()
-                    for line in temp:
-                        clientString.append(line.split(':')[0] + ':' + line.split(':')[1].strip('\n').encode().hex())
-                os.remove('/tmp/{}'.format(filename))
-            #attempt to extract the AP's name via tcpdump
-            tcpCatOut = subprocess.check_output("tcpdump -ennr " + fullpath  + " \"(type mgt subtype beacon) || (type mgt subtype probe-resp) || (type mgt subtype reassoc-resp) || (type mgt subtype assoc-req)\" 2>/dev/null | sed -E 's/.*BSSID:([0-9a-fA-F:]{17}).*\\((.*)\\).*/\\1\t\\2/g'",shell=True).decode('utf-8')
-            if ":" in tcpCatOut:
-                for i in tcpCatOut.split('\n'):
-                    if ":" in i:
-                        clientString.append(i.split('\t')[0].replace(':','') + ':' + i.split('\t')[1].strip('\n').encode().hex())
-        if clientString:
-            for line in clientString:
-                if line.split(':')[0] == hashString.split(':')[1]: #if the AP MAC pulled from the JSON or tcpdump output matches the AP MAC in the raw 16800 output
-                    hashString = hashString.strip('\n') + ':' + (line.split(':')[1])
-                    if (len(hashString.split(':')) == 4) and not (hashString.endswith(':')):
-                        with open(fullpath.split('.')[0] + '.16800','w') as tempFileC:
-                            logging.debug('[hashie] Repaired: {} ({})'.format(filename,hashString))
-                            tempFileC.write(hashString + '\n')
-                        return True
-                    else:
-                        logging.debug('[hashie] Discarded: {} {}'.format(line, hashString))
-        else:
-            os.remove(fullpath.split('.')[0] + '.16800')
-            return False
-    
+           
     def _process_stale_pcaps(self, handshake_dir):
         handshakes_list = [os.path.join(handshake_dir, filename) for filename in os.listdir(handshake_dir) if filename.endswith('.pcap')]
         failed_jobs = []
@@ -174,26 +93,17 @@ class hashie(plugins.Plugin):
         for num, handshake in enumerate(handshakes_list):
             fullpathNoExt = handshake.split('.')[0]
             pcapFileName = handshake.split('/')[-1:][0]
-            if not os.path.isfile(fullpathNoExt + '.2500'): #if no 2500, try
-                if self._writeEAPOL(handshake):
-                    successful_jobs.append('2500: ' + pcapFileName)
-                else:
-                    failed_jobs.append('2500: ' + pcapFileName)
-
-
-            if not os.path.isfile(fullpathNoExt + '.16800'): #if no 16800, try
-                if self._writeEAPOL(handshake):
-                    successful_jobs.append('16800: ' + pcapFileName)
-                else:
-                    failed_jobs.append('16800: ' + pcapFileName)
-
-        
             if not os.path.isfile(fullpathNoExt + '.22000'): #if no 22000, try
-                if self._writeEAPOLPMKID(handshake, ""):
+                if self._writeEAPOL(handshake):
                     successful_jobs.append('22000: ' + pcapFileName)
                 else:
                     failed_jobs.append('22000: ' + pcapFileName)
-                    if not os.path.isfile(fullpathNoExt + '.2500'): #if no 22000 AND no 2500
+            if not os.path.isfile(fullpathNoExt + '.16800'): #if no 16800, try
+                if self._writePMKID(handshake, ""):
+                    successful_jobs.append('16800: ' + pcapFileName)
+                else:
+                    failed_jobs.append('16800: ' + pcapFileName)
+                    if not os.path.isfile(fullpathNoExt + '.22000'): #if no 16800 AND no 22000
                         lonely_pcaps.append(handshake)
                         logging.debug('[hashie] Batch job: added {} to lonely list'.format(pcapFileName))
             if ((num + 1) % 50 == 0) or (num + 1 == len(handshakes_list)): #report progress every 50, or when done
