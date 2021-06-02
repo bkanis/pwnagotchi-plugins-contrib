@@ -12,7 +12,7 @@ import pwnagotchi.ui.fonts as fonts
 
 class hashie(plugins.Plugin):
     __author__ = 'junohea.mail@gmail.com'
-    __version__ = '1.0.1'
+    __version__ = '1.0.2'
     __license__ = 'GPL3'
     __description__ = '''
                         Attempt to automatically convert pcaps to a crackable format.
