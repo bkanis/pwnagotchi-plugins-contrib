@@ -42,9 +42,6 @@ class hashie(plugins.Plugin):
                                 the reported AP name and MAC to complete the hash
                             - The repair is very basic and could certainly be improved!
                         Todo:
-                          Make it so users dont need hcxpcaptool (unless it gets added to the base image)
-                              Phase 1: Extract/construct 22000/16800 hashes through tcpdump commands
-                              Phase 2: Extract/construct 22000/16800 hashes entirely in python
                           Improve the code, a lot
                         '''
     
@@ -68,9 +65,9 @@ class hashie(plugins.Plugin):
             name = filename.split('/')[-1:][0].split('.')[0]
             
             if os.path.isfile(fullpathNoExt +  '.22000'):
-                handshake_status.append('Already have {}.22000 (EAPOL)'.format(name))
+                handshake_status.append('Already have {}.22000 (EAPOL + PMKID)'.format(name))
             elif self._writeEAPOL(filename):
-                handshake_status.append('Created {}.22000 (EAPOL) from pcap'.format(name))
+                handshake_status.append('Created {}.22000 (EAPOL + PMKID) from pcap'.format(name))
 
             if handshake_status:
                 logging.info('[hashie] Good news:\n\t' + '\n\t'.join(handshake_status))
@@ -98,14 +95,9 @@ class hashie(plugins.Plugin):
                     successful_jobs.append('22000: ' + pcapFileName)
                 else:
                     failed_jobs.append('22000: ' + pcapFileName)
-            if not os.path.isfile(fullpathNoExt + '.16800'): #if no 16800, try
-                if self._writePMKID(handshake, ""):
-                    successful_jobs.append('16800: ' + pcapFileName)
-                else:
-                    failed_jobs.append('16800: ' + pcapFileName)
-                    if not os.path.isfile(fullpathNoExt + '.22000'): #if no 16800 AND no 22000
-                        lonely_pcaps.append(handshake)
-                        logging.debug('[hashie] Batch job: added {} to lonely list'.format(pcapFileName))
+                    lonely_pcaps.append(handshake)
+                    logging.debug('[hashie] Batch job: added {} to lonely list'.format(pcapFileName))
+
             if ((num + 1) % 50 == 0) or (num + 1 == len(handshakes_list)): #report progress every 50, or when done
                 logging.info('[hashie] Batch job: {}/{} done ({} fails)'.format(num + 1,len(handshakes_list),len(lonely_pcaps)))
         if successful_jobs:
