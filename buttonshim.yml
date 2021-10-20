@@ -5,7 +5,7 @@ buttonshim:
             command: ''
             blink:
                 enabled: false
-                red: 1
+                red: 0
                 green: 0
                 blue: 0
                 on_time: 0
